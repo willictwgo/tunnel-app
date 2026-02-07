@@ -5,14 +5,15 @@ import io
 import xml.etree.ElementTree as ET
 import time
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # --- 設定頁面 ---
 st.set_page_config(page_title="雪隧戰情室", page_icon="🏎️", layout="centered")
 
-# --- CSS 優化 ---
+# --- CSS 優化 (加入深藍色建議框樣式) ---
 st.markdown("""
     <style>
+    /* 數字儀表板樣式 */
     .stMetric {
         background-color: #1E1E1E;
         border: 1px solid #333;
@@ -23,6 +24,8 @@ st.markdown("""
     div[data-testid="stMetricValue"] {
         font-size: 2.2rem;
     }
+    
+    /* 狀態標籤 */
     .status-badge {
         font-size: 0.8rem;
         padding: 4px 8px;
@@ -32,23 +35,48 @@ st.markdown("""
     }
     .status-ok { background-color: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
     .status-sim { background-color: #451a03; color: #fcd34d; border: 1px solid #d97706; }
+
+    /* 🔵 藍色建議框 (新功能) */
+    .blue-recommend-box {
+        background-color: #004aad; /* 顯眼的深藍色 */
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: bold;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border: 1px solid #007bff;
+    }
+    
+    /* 灰色無建議框 */
+    .gray-box {
+        background-color: #2b2b2b;
+        color: #aaa;
+        padding: 10px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 0.9rem;
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 模擬數據生成器 (當連線失敗時使用) ---
+# --- 模擬數據生成器 ---
 def get_simulated_data():
     now = datetime.now()
     hour = now.hour
     is_weekend = now.weekday() >= 5
-    
-    # 基礎速度 (深夜快，尖峰慢)
     if 0 <= hour < 6: base = 85
     elif 7 <= hour < 20: base = 60 if is_weekend else 70
     else: base = 75
     
-    # 隨機波動
+    # 加入隨機波動
     n_in = min(90, max(20, base + random.randint(-5, 10)))
-    n_out = min(90, max(20, base + random.randint(-10, 5))) # 外側通常稍慢
+    n_out = min(90, max(20, base + random.randint(-10, 5)))
     s_in = min(90, max(20, base + random.randint(-5, 10)))
     s_out = min(90, max(20, base + random.randint(-8, 8)))
     
@@ -59,44 +87,30 @@ def get_simulated_data():
 
 # --- 核心：多重路徑抓取 ---
 def get_tunnel_data():
-    # 高公局資料源
     target_url = "https://tisvcloud.freeway.gov.tw/live/VD/VD_Live.xml.gz"
-    
-    # 定義跳板池 (優先順序)
     proxies = [
-        # 1. ThingProxy (支援二進位檔案)
         {"url": f"https://thingproxy.freeboard.io/fetch/{target_url}", "name": "線路 A"},
-        # 2. AllOrigins (備用)
         {"url": f"https://api.allorigins.win/raw?url={target_url}", "name": "線路 B"},
-        # 3. 直連 (碰運氣)
         {"url": target_url, "name": "直連"}
     ]
-    
     headers = {"User-Agent": "Mozilla/5.0"}
 
     for proxy in proxies:
         try:
-            # 設定 5 秒超時，快速切換
             response = requests.get(proxy["url"], headers=headers, timeout=5)
-            
             if response.status_code == 200:
-                # 嘗試解壓縮
                 try:
                     compressed_file = io.BytesIO(response.content)
                     decompressed_file = gzip.GzipFile(fileobj=compressed_file)
                     tree = ET.parse(decompressed_file)
                 except:
-                    # 如果跳板解壓失敗 (有些跳板會破壞 gzip)，嘗試直接當作 XML 解析 (萬一源頭改了)
-                    try:
-                        tree = ET.fromstring(response.content)
-                    except:
-                        continue # 解析失敗，換下一個
+                    try: tree = ET.fromstring(response.content)
+                    except: continue
 
                 root = tree.getroot()
                 data_store = {"S": {"inner": [], "outer": []}, "N": {"inner": [], "outer": []}}
                 TUNNEL_START, TUNNEL_END = 15000, 28000
 
-                # 篩選數據
                 for info in root.findall(".//Info"):
                     if info.attrib.get("freewayId") == "5":
                         location = float(info.attrib.get("startLocation", 0)) * 1000
@@ -117,33 +131,38 @@ def get_tunnel_data():
                     "S": {"in": calc_avg(data_store["S"]["inner"]), "out": calc_avg(data_store["S"]["outer"])}
                 }
                 
-                # 檢查數據是否合理 (全 0 代表解析錯誤)
-                if result["N"]["in"] == 0 and result["S"]["in"] == 0:
-                    continue
-                    
+                if result["N"]["in"] == 0 and result["S"]["in"] == 0: continue
                 return result, f"🟢 即時連線 ({proxy['name']})"
-                
-        except Exception:
-            continue
+        except: continue
 
-    # 如果全部失敗，回傳模擬數據
     return get_simulated_data()
 
 # --- 介面顯示 ---
 st.title("🏎️ 雪隧戰情室")
 
-if st.button('🔄 刷新數據', type="primary", use_container_width=True):
+# 自動刷新開關
+auto_refresh = st.toggle("開啟每60秒自動刷新", value=True)
+
+if st.button('🔄 立即刷新數據', type="primary", use_container_width=True):
     st.rerun()
 
 data, status_msg = get_tunnel_data()
 
-# 狀態標籤
+# 顯示狀態
 if "即時" in status_msg:
     st.markdown(f'<div class="status-badge status-ok">{status_msg}</div>', unsafe_allow_html=True)
 else:
     st.markdown(f'<div class="status-badge status-sim">{status_msg}</div>', unsafe_allow_html=True)
 
-# 顯示數據
+# 輔助函式：顯示藍色建議框
+def show_recommendation(diff, faster_lane_name):
+    if diff >= 5: # 內側快
+        st.markdown(f'<div class="blue-recommend-box">💡 建議走【內側】 (快 {diff} km/h)</div>', unsafe_allow_html=True)
+    elif diff <= -5: # 外側快
+        st.markdown(f'<div class="blue-recommend-box">💡 建議走【外側】 (快 {abs(diff)} km/h)</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="gray-box">⚖️ 兩側速度相當，請保持車道</div>', unsafe_allow_html=True)
+
 if data:
     # --- 北上 ---
     st.subheader("🛫 北上 (往台北)")
@@ -154,10 +173,8 @@ if data:
     c1.metric("內側 (左)", f"{n_in}", f"{n_diff} vs 右")
     c2.metric("外側 (右)", f"{n_out}", f"{-n_diff} vs 左", delta_color="inverse")
     
-    if n_in > 70 and n_out > 70: st.success("✅ 全線順暢")
-    elif n_diff >= 5: st.info("💡 建議走【內側】")
-    elif n_diff <= -5: st.warning("💡 建議走【外側】")
-    else: st.info("⚖️ 速度相當")
+    # 呼叫建議函式
+    show_recommendation(n_diff, "內側")
 
     st.markdown("---")
 
@@ -170,7 +187,10 @@ if data:
     c3.metric("內側 (左)", f"{s_in}", f"{s_diff} vs 右")
     c4.metric("外側 (右)", f"{s_out}", f"{-s_diff} vs 左", delta_color="inverse")
 
-    if s_in > 70 and s_out > 70: st.success("✅ 全線順暢")
-    elif s_diff >= 5: st.info("💡 建議走【內側】")
-    elif s_diff <= -5: st.warning("💡 建議走【外側】")
-    else: st.info("⚖️ 速度相當")
+    # 呼叫建議函式
+    show_recommendation(s_diff, "內側")
+
+# 自動刷新邏輯 (放在最後)
+if auto_refresh:
+    time.sleep(60) # 等待60秒
+    st.rerun()     # 重新執行
