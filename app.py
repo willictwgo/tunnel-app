@@ -7,91 +7,112 @@ import time
 import random
 from datetime import datetime
 
-# --- 設定頁面 ---
-st.set_page_config(page_title="國五雙隧道戰情室", page_icon="🏎️", layout="centered")
+# --- 設定頁面 (開啟 wide mode 以利用最大寬度) ---
+st.set_page_config(page_title="國五戰情室", page_icon="🏎️", layout="wide")
 
-# --- CSS 優化 (定義客製化卡片樣式) ---
+# --- CSS 極致優化 (手機版強制左右並排) ---
 st.markdown("""
     <style>
+    /* 全局設定 */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
     /* 標題樣式 */
-    .tunnel-title {
-        font-size: 1.5rem;
-        font-weight: bold;
+    .tunnel-header {
+        font-size: 1.4rem;
+        font-weight: 900;
         color: #ffcc00;
-        margin-top: 30px;
+        text-align: center;
+        margin-top: 20px;
         margin-bottom: 10px;
-        border-bottom: 2px solid #555;
-        padding-bottom: 5px;
+        background: #333;
+        padding: 5px;
+        border-radius: 8px;
     }
-    
-    /* 速度卡片容器 */
-    .speed-card {
-        background-color: #1E1E1E;
-        border: 1px solid #333;
-        padding: 15px;
-        border-radius: 12px;
-        text-align: center;
-        height: 100%;
-    }
-    
-    /* 🏆 較快車道的特效 (綠色邊框) */
-    .speed-card-fast {
-        border: 2px solid #00e676; /* 亮綠色邊框 */
-        background-color: #1a2e24; /* 極淡的綠底 */
-        box-shadow: 0 0 15px rgba(0, 230, 118, 0.1);
-    }
-    
-    /* 車道名稱 (內側/外側) */
-    .lane-label {
-        color: #aaaaaa;
-        font-size: 1rem;
-        margin-bottom: 5px;
-    }
-    
-    /* 🏎️ 速度數字 */
-    .speed-number {
-        font-size: 2.5rem;
-        font-weight: 800;
-        line-height: 1.2;
-    }
-    
-    /* 贏家顏色 (亮綠) */
-    .text-fast { color: #00e676; }
-    
-    /* 一般顏色 (白) */
-    .text-normal { color: #ffffff; }
-    
-    /* 差異小字 */
-    .diff-label {
-        font-size: 0.9rem;
-        font-weight: bold;
-        margin-top: 5px;
-    }
-    .diff-pos { color: #00e676; } /* 綠色 (快) */
-    .diff-neg { color: #ff1744; } /* 紅色 (慢) */
-    .diff-neu { color: #888; }    /* 灰色 (平手) */
 
-    /* 🔵 藍色建議框 */
-    .blue-recommend-box {
-        background-color: #004aad;
+    /* 🚗 車道容器 (Flexbox 強制並排) */
+    .lane-container {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    /* 單一車道卡片 */
+    .lane-card {
+        width: 48%; /* 強制佔一半寬度 */
+        background-color: #1E1E1E;
+        border: 1px solid #444;
+        border-radius: 10px;
+        padding: 10px 5px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* 🏆 較快車道的特效 (綠框+綠底) */
+    .lane-fast {
+        border: 2px solid #00e676;
+        background-color: rgba(0, 230, 118, 0.05);
+        box-shadow: 0 0 10px rgba(0, 230, 118, 0.1);
+    }
+
+    /* 文字標籤 */
+    .lane-label {
+        font-size: 0.9rem;
+        color: #aaa;
+        margin-bottom: 2px;
+    }
+
+    /* 速度數字 (手機版特化大字體) */
+    .speed-num {
+        font-size: 2.2rem;
+        font-weight: 800;
+        line-height: 1.1;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    
+    .text-green { color: #00e676; }
+    .text-white { color: #ffffff; }
+
+    /* 差異小字 */
+    .diff-tag {
+        font-size: 0.75rem;
+        font-weight: bold;
+        margin-top: 2px;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .diff-win { background: #064e3b; color: #6ee7b7; }
+    .diff-lose { background: #450a0a; color: #fca5a5; }
+
+    /* 🔵 建議框 */
+    .rec-box {
+        background: linear-gradient(90deg, #004aad 0%, #0066cc 100%);
         color: white;
-        padding: 12px;
+        padding: 10px;
         border-radius: 8px;
         text-align: center;
         font-size: 1rem;
         font-weight: bold;
-        margin-top: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        margin-bottom: 20px;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.3);
     }
     
-    .gray-box {
-        background-color: #2b2b2b;
-        color: #aaa;
-        padding: 8px;
-        border-radius: 8px;
-        text-align: center;
-        font-size: 0.9rem;
-        margin-top: 15px;
+    /* 方向標題 */
+    .dir-title {
+        font-size: 1rem;
+        color: #ddd;
+        margin-top: 10px;
+        margin-bottom: 5px;
+        border-left: 4px solid #00e676;
+        padding-left: 8px;
     }
     
     /* 狀態標籤 */
@@ -99,8 +120,9 @@ st.markdown("""
         font-size: 0.8rem;
         padding: 4px 8px;
         border-radius: 4px;
-        margin-bottom: 10px;
-        display: inline-block;
+        margin-bottom: 5px;
+        text-align: center;
+        display: block;
     }
     .status-ok { background-color: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
     .status-sim { background-color: #451a03; color: #fcd34d; border: 1px solid #d97706; }
@@ -112,10 +134,10 @@ def get_simulated_data():
     now = datetime.now()
     hour = now.hour
     base = 85 if 0 <= hour < 6 else (60 if 7 <= hour < 20 else 75)
-    def gen_speed(): return min(90, max(20, base + random.randint(-10, 10)))
+    def gen(): return min(90, max(20, base + random.randint(-10, 10)))
     return {
-        "Pengshan": { "N": {"in": gen_speed(), "out": gen_speed()}, "S": {"in": gen_speed(), "out": gen_speed()} },
-        "Hsuehshan": { "N": {"in": gen_speed(), "out": gen_speed()}, "S": {"in": gen_speed(), "out": gen_speed()} }
+        "Pengshan": { "N": {"in": gen(), "out": gen()}, "S": {"in": gen(), "out": gen()} },
+        "Hsuehshan": { "N": {"in": gen(), "out": gen()}, "S": {"in": gen(), "out": gen()} }
     }, "⚠️ 離線推估模式"
 
 # --- 核心：抓取數據 ---
@@ -141,104 +163,90 @@ def get_tunnel_data():
                     except: continue
 
                 root = tree.getroot()
-                raw_data = {
+                raw = {
                     "Pengshan": {"S": {"in": [], "out": []}, "N": {"in": [], "out": []}},
                     "Hsuehshan": {"S": {"in": [], "out": []}, "N": {"in": [], "out": []}}
                 }
-                RANGE_PENGSHAN = (11000, 15000)
-                RANGE_HSUEHSHAN = (15000, 28000)
+                # 定義里程
+                R_PENG = (11000, 15000)
+                R_HSUE = (15000, 28000)
 
                 for info in root.findall(".//Info"):
                     if info.attrib.get("freewayId") == "5":
-                        location = float(info.attrib.get("startLocation", 0)) * 1000
-                        direction = info.attrib.get("directionId")
-                        target_tunnel = None
-                        if RANGE_PENGSHAN[0] <= location <= RANGE_PENGSHAN[1]: target_tunnel = "Pengshan"
-                        elif RANGE_HSUEHSHAN[0] <= location <= RANGE_HSUEHSHAN[1]: target_tunnel = "Hsuehshan"
+                        loc = float(info.attrib.get("startLocation", 0)) * 1000
+                        direc = info.attrib.get("directionId")
+                        target = None
+                        if R_PENG[0] <= loc <= R_PENG[1]: target = "Pengshan"
+                        elif R_HSUE[0] <= loc <= R_HSUE[1]: target = "Hsuehshan"
                         
-                        if target_tunnel:
+                        if target:
                             for lane in info.findall("Lane"):
-                                speed = float(lane.attrib.get("speed", 0))
-                                if speed > 0:
-                                    lane_id = lane.attrib.get("laneId")
-                                    if lane_id == "1": raw_data[target_tunnel][direction]["in"].append(speed)
-                                    elif lane_id == "2": raw_data[target_tunnel][direction]["out"].append(speed)
+                                spd = float(lane.attrib.get("speed", 0))
+                                if spd > 0:
+                                    lid = lane.attrib.get("laneId")
+                                    if lid == "1": raw[target][direc]["in"].append(spd)
+                                    elif lid == "2": raw[target][direc]["out"].append(spd)
                 
-                def calc_avg(lst): return int(sum(lst)/len(lst)) if lst else 0
-                
-                final_result = {}
-                for tunnel in ["Pengshan", "Hsuehshan"]:
-                    final_result[tunnel] = {
-                        "N": {"in": calc_avg(raw_data[tunnel]["N"]["in"]), "out": calc_avg(raw_data[tunnel]["N"]["out"])},
-                        "S": {"in": calc_avg(raw_data[tunnel]["S"]["in"]), "out": calc_avg(raw_data[tunnel]["S"]["out"])}
+                def avg(l): return int(sum(l)/len(l)) if l else 0
+                res = {}
+                for t in ["Pengshan", "Hsuehshan"]:
+                    res[t] = {
+                        "N": {"in": avg(raw[t]["N"]["in"]), "out": avg(raw[t]["N"]["out"])},
+                        "S": {"in": avg(raw[t]["S"]["in"]), "out": avg(raw[t]["S"]["out"])}
                     }
-                
-                if final_result["Hsuehshan"]["N"]["in"] == 0: continue
-                return final_result, f"🟢 即時連線 ({proxy['name']})"
+                if res["Hsuehshan"]["N"]["in"] == 0: continue
+                return res, f"🟢 即時連線 ({proxy['name']})"
         except: continue
     return get_simulated_data()
 
-# --- 客製化卡片繪製函式 ---
-def draw_speed_card(col, title, speed, diff, is_faster):
-    # 決定樣式
-    card_class = "speed-card speed-card-fast" if is_faster else "speed-card"
-    text_class = "text-fast" if is_faster else "text-normal"
+# --- HTML 生成函式 (核心視覺邏輯) ---
+def render_lane_html(inner_spd, outer_spd):
+    diff = inner_spd - outer_spd
     
-    # 決定差異顯示
-    if diff > 0:
-        diff_html = f'<div class="diff-label diff-pos">↑ 快 {diff}</div>'
-    elif diff < 0:
-        diff_html = f'<div class="diff-label diff-neg">↓ 慢 {abs(diff)}</div>'
-    else:
-        diff_html = '<div class="diff-label diff-neu">- 持平</div>'
+    # 判斷樣式
+    in_cls = "lane-card"
+    out_cls = "lane-card"
+    in_txt = "text-white"
+    out_txt = "text-white"
+    in_tag = ""
+    out_tag = ""
 
+    if diff >= 3: # 內側快
+        in_cls += " lane-fast"
+        in_txt = "text-green"
+        in_tag = f'<div class="diff-tag diff-win">快 {diff}</div>'
+        out_tag = f'<div class="diff-tag diff-lose">慢 {diff}</div>'
+    elif diff <= -3: # 外側快
+        out_cls += " lane-fast"
+        out_txt = "text-green"
+        out_tag = f'<div class="diff-tag diff-win">快 {abs(diff)}</div>'
+        in_tag = f'<div class="diff-tag diff-lose">慢 {abs(diff)}</div>'
+    
     html = f"""
-    <div class="{card_class}">
-        <div class="lane-label">{title}</div>
-        <div class="speed-number {text_class}">{speed}</div>
-        {diff_html}
+    <div class="lane-container">
+        <div class="{in_cls}">
+            <div class="lane-label">內側 (左)</div>
+            <div class="speed-num {in_txt}">{inner_spd}</div>
+            {in_tag}
+        </div>
+        <div class="{out_cls}">
+            <div class="lane-label">外側 (右)</div>
+            <div class="speed-num {out_txt}">{outer_spd}</div>
+            {out_tag}
+        </div>
     </div>
     """
-    col.markdown(html, unsafe_allow_html=True)
+    return html
 
-# --- 顯示區段函式 ---
-def show_tunnel_section(tunnel_name, n_data, s_data):
-    st.markdown(f'<div class="tunnel-title">{tunnel_name}</div>', unsafe_allow_html=True)
-    
-    # 北上
-    st.caption("🛫 北上 (往台北)")
-    c1, c2 = st.columns(2)
-    n_diff = n_data["in"] - n_data["out"]
-    
-    # 判斷誰比較快 (大於 2km/h 才算快，避免閃爍)
-    n_in_faster = n_diff >= 2
-    n_out_faster = n_diff <= -2
-    
-    draw_speed_card(c1, "內側 (左)", n_data['in'], n_diff, n_in_faster)
-    draw_speed_card(c2, "外側 (右)", n_data['out'], -n_diff, n_out_faster)
-    
-    if n_diff >= 5: st.markdown(f'<div class="blue-recommend-box">💡 內側快 {n_diff} km</div>', unsafe_allow_html=True)
-    elif n_diff <= -5: st.markdown(f'<div class="blue-recommend-box">💡 外側快 {abs(n_diff)} km</div>', unsafe_allow_html=True)
-    else: st.markdown(f'<div class="gray-box">⚖️ 速度相當</div>', unsafe_allow_html=True)
-
-    # 南下
-    st.markdown("<br>", unsafe_allow_html=True) # 間距
-    st.caption("🏠 南下 (往宜蘭)")
-    c3, c4 = st.columns(2)
-    s_diff = s_data["in"] - s_data["out"]
-    
-    s_in_faster = s_diff >= 2
-    s_out_faster = s_diff <= -2
-
-    draw_speed_card(c3, "內側 (左)", s_data['in'], s_diff, s_in_faster)
-    draw_speed_card(c4, "外側 (右)", s_data['out'], -s_diff, s_out_faster)
-
-    if s_diff >= 5: st.markdown(f'<div class="blue-recommend-box">💡 內側快 {s_diff} km</div>', unsafe_allow_html=True)
-    elif s_diff <= -5: st.markdown(f'<div class="blue-recommend-box">💡 外側快 {abs(s_diff)} km</div>', unsafe_allow_html=True)
-    else: st.markdown(f'<div class="gray-box">⚖️ 速度相當</div>', unsafe_allow_html=True)
+def render_recommendation(diff):
+    if diff >= 5:
+        st.markdown(f'<div class="rec-box">💡 建議走【內側】 (快 {diff} km)</div>', unsafe_allow_html=True)
+    elif diff <= -5:
+        st.markdown(f'<div class="rec-box">💡 建議走【外側】 (快 {abs(diff)} km)</div>', unsafe_allow_html=True)
+    # 差異不大就不顯示建議，節省空間
 
 # --- 主程式 ---
-st.title("🏎️ 國五雙隧道戰情室")
+st.markdown('<div style="text-align:center; font-size:1.5rem;">🏎️ 國五戰情室</div>', unsafe_allow_html=True)
 auto_refresh = st.toggle("每60秒自動刷新", value=True)
 
 if st.button('🔄 立即刷新', type="primary", use_container_width=True):
@@ -246,14 +254,32 @@ if st.button('🔄 立即刷新', type="primary", use_container_width=True):
 
 data, status_msg = get_tunnel_data()
 
-if "即時" in status_msg:
-    st.markdown(f'<div class="status-badge status-ok">{status_msg}</div>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<div class="status-badge status-sim">{status_msg}</div>', unsafe_allow_html=True)
+# 狀態列
+status_cls = "status-ok" if "即時" in status_msg else "status-sim"
+st.markdown(f'<div class="status-badge {status_cls}">{status_msg}</div>', unsafe_allow_html=True)
 
 if data:
-    show_tunnel_section("⛰️ 彭山隧道 (3.8km)", data["Pengshan"]["N"], data["Pengshan"]["S"])
-    show_tunnel_section("🗻 雪山隧道 (12.9km)", data["Hsuehshan"]["N"], data["Hsuehshan"]["S"])
+    # 彭山隧道
+    st.markdown('<div class="tunnel-header">⛰️ 彭山隧道</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="dir-title">🛫 北上 (往台北)</div>', unsafe_allow_html=True)
+    st.markdown(render_lane_html(data["Pengshan"]["N"]["in"], data["Pengshan"]["N"]["out"]), unsafe_allow_html=True)
+    render_recommendation(data["Pengshan"]["N"]["in"] - data["Pengshan"]["N"]["out"])
+
+    st.markdown('<div class="dir-title">🏠 南下 (往宜蘭)</div>', unsafe_allow_html=True)
+    st.markdown(render_lane_html(data["Pengshan"]["S"]["in"], data["Pengshan"]["S"]["out"]), unsafe_allow_html=True)
+    render_recommendation(data["Pengshan"]["S"]["in"] - data["Pengshan"]["S"]["out"])
+
+    # 雪山隧道
+    st.markdown('<div class="tunnel-header">🗻 雪山隧道</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="dir-title">🛫 北上 (往台北)</div>', unsafe_allow_html=True)
+    st.markdown(render_lane_html(data["Hsuehshan"]["N"]["in"], data["Hsuehshan"]["N"]["out"]), unsafe_allow_html=True)
+    render_recommendation(data["Hsuehshan"]["N"]["in"] - data["Hsuehshan"]["N"]["out"])
+
+    st.markdown('<div class="dir-title">🏠 南下 (往宜蘭)</div>', unsafe_allow_html=True)
+    st.markdown(render_lane_html(data["Hsuehshan"]["S"]["in"], data["Hsuehshan"]["S"]["out"]), unsafe_allow_html=True)
+    render_recommendation(data["Hsuehshan"]["S"]["in"] - data["Hsuehshan"]["S"]["out"])
 
 if auto_refresh:
     time.sleep(60)
